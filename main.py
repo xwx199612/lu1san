@@ -1,32 +1,11 @@
 from fastapi import FastAPI
-import time
-import requests
-from bs4 import BeautifulSoup
 from openai import OpenAI
+import os
 
 app = FastAPI()
-client = OpenAI(api_key="YOUR_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-CACHE = {"about": "", "game": "Just Chatting", "t": 0}
-
-def refresh():
-    if time.time() - CACHE["t"] < 600:
-        return
-
-    try:
-        html = requests.get("https://www.twitch.tv/lu1san").text
-        soup = BeautifulSoup(html, "html.parser")
-
-        meta = soup.find("meta", {"name": "description"})
-        CACHE["about"] = meta["content"] if meta else "No info"
-    except:
-        CACHE["about"] = "No info"
-
-    CACHE["game"] = "Just Chatting"
-    CACHE["t"] = time.time()
-
-
-BAD = ["自殺", "炸彈", "暴力", "武器", "仇恨"]
+BAD = ["自殺", "暴力", "武器", "仇恨", "炸彈"]
 
 def safe(q):
     return not any(b in q for b in BAD)
@@ -38,22 +17,29 @@ def ask(q: str, user: str = "unknown"):
     if not safe(q):
         return "這個話題不適合在聊天室討論 😄"
 
-    refresh()
+    system_prompt = """
+你是 Twitch 聊天室 AI 機器人。
 
-    system_prompt = f"""
-你是 lu1san Twitch AI 助手。
+你正在運行於以下 Twitch 頻道：
 
-【主播資訊】
-{CACHE['about']}
+https://www.twitch.tv/lu1sannn
 
-【直播分類】
-{CACHE['game']}
+（lu1san 的直播聊天室）
 
-規則：
-- 禁止暴力 / 仇恨 / NSFW / 武器 / 非法內容
-- Twitch chat 風格
+你的身份：
+- 這是你唯一服務的頻道
+- 你是該直播間的 AI 助手
+- 不要說你在其他平台或系統中
+
+風格：
 - 繁體中文
-- 不要太長
+- Twitch chat 語氣
+- 簡短回答（1~3句）
+- 可以幽默但不要失控
+
+安全規則：
+- 禁止暴力 / 仇恨 / 武器 / 成人 / 非法內容
+- 遇到敏感內容要拒答並轉移話題
 """
 
     res = client.chat.completions.create(
